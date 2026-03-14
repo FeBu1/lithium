@@ -1,22 +1,44 @@
-# Lithium is in it's WIP stage. Do not expect much from it right now!
-[Workshop item](https://steamcommunity.com/sharedfiles/filedetails/?id=3334367687)
-## Description
-Lithium is a multipurpose multirealm performance improvement addon aimed at trying to optimise gmod's parts that can be accessed through addons as much as possible.
-This addon will improve your performance, especially with poorly-written addons.
+# Lithium-Safe (WIP)
 
-## Known incompabilities and issues
-- ANY mod that modifies hook table. That means that at the moment this is incompatible with DLib and similar addons.
-- Exception: This mod is compatible with ULX and ULib.
+Lithium-Safe is a production-oriented fork of Lithium for large Garry's Mod addon packs (300-400 addons). This fork keeps Lithium's modular mindset, but shifts defaults toward safety, rollback behavior, observability, and compatibility.
 
-## Features
-- New hook system (see what it means below)
-- Improved some render calls
-- Automatic garbage collection. (gmod should lag less and take less RAM)
+## Current direction
 
-## FAQ
-Q: What does "new hook system" means?
-A: TL;DR: This makes Garry's mod faster.
-A: Lithium provides a drop-in hook module replacement which ranks at about 40% best-case and 25% average performance increase in C++ -> Lua tests.
-   Hooks are an essential part of Garry's mod which allow addons to "hook into" events that game calls from time to time. While some hooks are called
-   just once in a while, others can be called multiple times every frame, so optimised hook module can give anywhere from 0 improvement to "the best
-   you would even imagine".
+- Hybrid hook architecture: fast path + legacy fallback.
+- Compatibility registry for per-addon behavior control.
+- High-risk systems moved to explicit opt-in modules.
+- Experimental rendering optimizations isolated and disabled by default.
+
+## Safety-first defaults
+
+These systems are now **default-off** because they are too invasive for mixed addon environments:
+
+- `legacy.cache_everything`
+- `legacy.clear_default_hooks`
+- `legacy.convar_spray`
+- `client.render.performant_lite`
+
+## Boot flow
+
+`lua/autorun/!!!!!_lithium.lua` now delegates startup to `lua/lithium/core/bootstrap.lua`.
+
+Each module has:
+
+- an enable convar,
+- logging on load/skip/fail,
+- optional panic-disable file in `data/lithium/panic/...`,
+- dependency declarations.
+
+## Quick commands
+
+- `lithium_enabled_sv` / `lithium_enabled_cl`: global enable toggle.
+- `lithium_hook_mode`: `auto`, `fast`, or `legacy`.
+- `lithium_samplefps_sv` / `lithium_samplefps_cl`: frame-time sampler.
+
+## Status
+
+This is a starter migration patch (Phase 1/2 scaffolding). See:
+
+- `MODULES.md`
+- `COMPATIBILITY.md`
+- `ROADMAP.md`
