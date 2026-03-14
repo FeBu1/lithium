@@ -13,6 +13,13 @@ function Loader:register(name, def)
 end
 
 function Loader:is_enabled(def)
+    if def.realm == "client" and SERVER then
+        return false, "wrong realm (client-only module)"
+    end
+    if def.realm == "server" and CLIENT then
+        return false, "wrong realm (server-only module)"
+    end
+
     if def.convar and not def.convar:GetBool() then
         return false, "disabled by convar"
     end
@@ -57,7 +64,7 @@ function Loader:load_module(name, visiting)
     end
 
     lithium.info("Loading module '" .. name .. "'")
-    local ok, err = pcall(def.load)
+    local ok, err = xpcall(def.load, debug.traceback)
     if not ok then
         self.failed[name] = err
         lithium.warn("Module '" .. name .. "' failed: " .. tostring(err))

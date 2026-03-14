@@ -6,7 +6,17 @@ local compatibility = include("lithium/core/compatibility_registry.lua")
 local dispatcher = include("lithium/hook/dispatcher.lua")
 
 local function safe_include(path)
-    return function() include(path) end
+    return function()
+        local ok, ret = pcall(include, path)
+        if not ok then
+            error(ret)
+        end
+
+        -- GMod include can fail and return false while also printing the stack.
+        if ret == false then
+            error("include failed for '" .. path .. "'")
+        end
+    end
 end
 
 local function setup_default_rules()
@@ -83,6 +93,7 @@ function M.run()
     })
 
     loader:register("legacy.client_util", {
+        realm = "client",
         depends_on = { "legacy.util" },
         convar = cvars.bool("legacy_client_util", true, "Enable legacy client utility helpers", { server = false, per_realm = true }),
         load = safe_include("lithium/util/client.lua")
@@ -107,16 +118,19 @@ function M.run()
     })
 
     loader:register("client.gpu_saver", {
+        realm = "client",
         convar = cvars.bool("client_gpu_saver", true, "Enable GPU saver", { server = false, per_realm = true }),
         load = safe_include("lithium/gpusaver.lua")
     })
 
     loader:register("client.timeout_overlay", {
+        realm = "client",
         convar = cvars.bool("client_timeout_overlay", true, "Enable timeout overlay", { server = false, per_realm = true }),
         load = safe_include("lithium/timingout.lua")
     })
 
     loader:register("client.render.performant_lite", {
+        realm = "client",
         convar = cvars.bool("exp_render_performant_lite", false, "Enable experimental PerformantRender-lite", { server = false, per_realm = true }),
         panic_file = "lithium/panic/exp_render_performant_lite.txt",
         load = safe_include("lithium/client/render/performant_render_apply.lua")
@@ -129,6 +143,9 @@ function M.run()
     })
 
     lithium.info("Startup complete. Loaded modules: " .. #result.loaded .. ", Failed modules: " .. #result.failed)
+    if #result.failed > 0 then
+        lithium.warn("Failed module list: " .. table.concat(result.failed, " | "))
+    end
 end
 
 return M
