@@ -34,3 +34,9 @@ ConVar: `lithium_hook_mode`
 - Anything mutating hook internals is treated as sensitive, not "bad".
 - Rendering state mutation is experimental-only and must support rollback.
 - "ConVar spray" optimizers are retained only as opt-in legacy module.
+
+
+## Source policy fallback
+
+In fast hook mode, `hook.Add` caller source is inspected (`debug.getinfo`) and matched against manual source rules.
+If a rule marks the source as compatibility-sensitive, Lithium logs the source/event/hook-id and falls back to the legacy backend while migrating existing hooks.

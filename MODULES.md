@@ -4,6 +4,7 @@
 
 - `core.gc` - periodic garbage collector.
 - `hook.dispatch` - hybrid hook selector and fallback controller.
+- `hook.diagnostics` - low-overhead profiler controls and dump/reset commands.
 - `legacy.util` - existing utility helpers.
 - `legacy.client_util` - client utility helpers.
 
@@ -35,3 +36,10 @@ Modules with panic files auto-disable themselves on startup failure by writing `
 - `data/lithium/panic/legacy_clear_default_hooks.txt`
 - `data/lithium/panic/legacy_convar_spray.txt`
 - `data/lithium/panic/exp_render_performant_lite.txt`
+
+
+## Diagnostics commands
+
+- `lithium_hook_profiler_dump [topN]`
+- `lithium_hook_profiler_reset`
+- `lithium_hook_profiler_enabled` (ConVar)

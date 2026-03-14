@@ -12,7 +12,6 @@ local function safe_include(path)
             error(ret)
         end
 
-        -- GMod include can fail and return false while also printing the stack.
         if ret == false then
             error("include failed for '" .. path .. "'")
         end
@@ -23,9 +22,20 @@ local function setup_default_rules()
     compatibility.register_addon_rule("dlib_hook_mutation", {
         name_pattern = "dlib",
         use_legacy_hook = true,
-        disable_features = { "experimental_render_derender" }
+        disable_features = { "experimental_render_derender" },
+        reason = "DLib-style hook table mutation compatibility mode"
     })
-    compatibility.register_addon_rule("ulib_safe_path", { name_pattern = "ulib", use_legacy_hook = false })
+    compatibility.register_addon_rule("ulib_safe_path", {
+        name_pattern = "ulib",
+        use_legacy_hook = false,
+        reason = "ULib known compatibility baseline"
+    })
+
+    compatibility.register_source_rule("dlib_source_hook_fallback", {
+        source_pattern = "dlib/",
+        use_legacy_hook = true,
+        reason = "hook.Add caller source matched DLib rule"
+    })
 end
 
 local function detect_compatibility()
@@ -63,6 +73,8 @@ function M.run()
 
     include("lithium/core/logging.lua")
     setup_default_rules()
+    lithium.compatibility_registry = compatibility
+    lithium.hook_dispatcher = dispatcher
 
     local loader = Loader.new()
     local hook_mode = CreateConVar("lithium_hook_mode", "auto", { FCVAR_ARCHIVE }, "Hook backend mode: auto/fast/legacy")
@@ -83,8 +95,13 @@ function M.run()
         panic_file = "lithium/panic/hook_dispatch.txt",
         load = function()
             local mode = dispatcher.select_mode(detect_compatibility(), hook_mode)
-            dispatcher.enable(mode)
+            dispatcher.enable(mode, { compatibility = compatibility })
         end
+    })
+
+    loader:register("hook.diagnostics", {
+        convar = cvars.bool("hook_diagnostics", true, "Enable hook diagnostics commands", { per_realm = true }),
+        load = safe_include("lithium/hook/diagnostics.lua")
     })
 
     loader:register("legacy.util", {
@@ -137,14 +154,22 @@ function M.run()
     })
 
     local result = loader:load_all({
-        "core.gc", "hook.dispatch", "legacy.util", "legacy.client_util", "legacy.cache_everything",
+        "core.gc", "hook.dispatch", "hook.diagnostics", "legacy.util", "legacy.client_util", "legacy.cache_everything",
         "legacy.clear_default_hooks", "legacy.convar_spray", "client.gpu_saver", "client.timeout_overlay",
         "client.render.performant_lite"
     })
 
-    lithium.info("Startup complete. Loaded modules: " .. #result.loaded .. ", Failed modules: " .. #result.failed)
+    lithium.info("Startup complete. Loaded modules: " .. #result.loaded .. ", Failed modules: " .. #result.failed .. ", Skipped modules: " .. #result.skipped)
     if #result.failed > 0 then
         lithium.warn("Failed module list: " .. table.concat(result.failed, " | "))
+    end
+    if #result.skipped > 0 then
+        lithium.info("Skipped module list: " .. table.concat(result.skipped, " | "))
+    end
+
+    local disp = dispatcher.get_stats and dispatcher.get_stats() or nil
+    if disp then
+        lithium.info("[HOOK] mode=" .. tostring(disp.active_mode) .. " fallbacks=" .. tostring(disp.fallback_count))
     end
 end
 
