@@ -29,6 +29,8 @@ local string = string
 local tostring = tostring
 local SysTime = SysTime
 local RealTime = RealTime
+local GetConVarFn = GetConVar
+local debug_getinfo = debug and debug.getinfo
 
 HOOK_MONITOR_HIGH = -2
 HOOK_HIGH = -1
@@ -48,7 +50,12 @@ local function profile_enabled()
 	end
 
 	diagnostics.next_cv_check = RealTime() + 1
-	local cv = GetConVar("lithium_hook_profiler_enabled")
+	if type(GetConVarFn) ~= "function" then
+		diagnostics.enabled_cache = false
+		return false
+	end
+
+	local cv = GetConVarFn("lithium_hook_profiler_enabled")
 	diagnostics.enabled_cache = cv and cv:GetBool() or false
 	return diagnostics.enabled_cache
 end
@@ -147,7 +154,7 @@ function Add(event, name, func, priority)
 	hooks_backward[event][name] = func
 	hooks_table[event] = hooks_table[event] or { 0, 0, 0, 0, 0 }
 
-	local info = debug.getinfo(2, "S") or {}
+	local info = debug_getinfo and debug_getinfo(2, "S") or {}
 	hook_meta[event][name] = {
 		source = tostring(info.short_src or info.source or "unknown")
 	}

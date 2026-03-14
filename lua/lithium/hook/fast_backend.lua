@@ -1,6 +1,7 @@
 require("lithium")
 
 local M = {}
+local debug_getinfo = debug and debug.getinfo
 
 function M.enable(opts)
     opts = opts or {}
@@ -16,7 +17,7 @@ function M.enable(opts)
 
     local base_add = hook.Add
     hook.Add = function(event, name, func, priority)
-        local info = debug.getinfo(2, "S") or {}
+        local info = debug_getinfo and debug_getinfo(2, "S") or {}
         local source = tostring(info.short_src or info.source or "unknown")
 
         if opts.compatibility and opts.on_policy_violation then
