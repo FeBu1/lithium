@@ -8,6 +8,7 @@ Lithium-Safe is a production-oriented fork of Lithium for large Garry's Mod addo
 - Compatibility registry for per-addon behavior control.
 - High-risk systems moved to explicit opt-in modules.
 - Experimental rendering optimizations isolated and disabled by default.
+- Optional networking telemetry module for large-pack diagnostics (disabled by default).
 
 ## Safety-first defaults
 
@@ -34,8 +35,9 @@ Each module has:
 - `lithium_enabled_sv` / `lithium_enabled_cl`: global enable toggle.
 - `lithium_hook_mode`: `auto`, `fast`, or `legacy`.
 - `lithium_samplefps_sv` / `lithium_samplefps_cl`: frame-time sampler.
-- `lithium_report_dump` / `lithium_report_export`: session telemetry report (console/export).
-- `lithium_tuning_summary`: heuristic compatibility tuning suggestions.
+- `lithium_report_dump` / `lithium_report_export`: session telemetry report (console/export), including hook + compatibility + network sections when enabled.
+- `lithium_tuning_summary`: heuristic compatibility/network tuning suggestions.
+- `lithium_net_dump` / `lithium_net_reset`: network telemetry inspection/reset (requires `net.diagnostics` module enabled).
 
 ## Status
 

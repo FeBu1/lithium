@@ -64,6 +64,10 @@ local function get_compat_stats()
     return lithium.compatibility_registry and lithium.compatibility_registry.get_stats and lithium.compatibility_registry.get_stats() or nil
 end
 
+local function get_net_report(limit)
+    return lithium.net_diagnostics and lithium.net_diagnostics.get_report and lithium.net_diagnostics.get_report(limit) or nil
+end
+
 local function build_header(disp, compat, diag)
     local map = game and game.GetMap and game.GetMap() or "unknown"
     local players = player and player.GetCount and player.GetCount() or -1
@@ -157,10 +161,24 @@ local function build_tuning_suggestions(diag, disp, compat, limit)
     return suggestions
 end
 
+local function merge_net_tuning_suggestions(suggestions, net_report)
+    if not net_report or not net_report.suggestions then
+        return
+    end
+
+    suggestions.network_candidates = {
+        heuristic = true,
+        broadcast_heavy_messages = net_report.suggestions.broadcast_heavy_messages or {},
+        candidate_event_spam_messages = net_report.suggestions.candidate_event_spam_messages or {},
+        candidate_large_payload_messages = net_report.suggestions.candidate_large_payload_messages or {}
+    }
+end
+
 local function build_report(limit)
     local diag = hook.GetLithiumDiagnostics and hook.GetLithiumDiagnostics() or {}
     local disp = get_dispatcher_stats() or {}
     local compat = get_compat_stats() or {}
+    local net_report = get_net_report(limit)
     local modules = lithium.module_summary or {}
     local patches = lithium.addon_patch_summary or {}
 
@@ -209,7 +227,7 @@ local function build_report(limit)
         return { source = source, hits = hits, bucket = source_bucket(source) }
     end, function(a, b) return a.hits > b.hits end, limit)
 
-    return {
+    local report = {
         header = build_header(disp, compat, diag),
         backend = {
             mode = disp.active_mode or "unknown",
@@ -258,6 +276,10 @@ local function build_report(limit)
         },
         tuning_suggestions = build_tuning_suggestions(diag, disp, compat, limit)
     }
+
+    report.net = net_report
+    merge_net_tuning_suggestions(report.tuning_suggestions, net_report)
+    return report
 end
 
 local function log_report(report)
@@ -268,6 +290,9 @@ local function log_report(report)
     lithium.info("[LITHIUM][REPORT] patches total=" .. tostring(report.patches.total) .. " applied=" .. tostring(report.patches.applied) .. " failed=" .. tostring(report.patches.failed))
     lithium.info("[LITHIUM][REPORT] profiler enabled=" .. tostring(report.profiler.enabled) .. " samples=" .. tostring(report.profiler.profiler_samples) .. " events=" .. tostring(report.profiler.total_events) .. " calls=" .. tostring(report.profiler.total_calls))
     lithium.info("[LITHIUM][REPORT] compatibility addon_matches=" .. tostring(report.compatibility.addon_matches) .. " source_matches=" .. tostring(report.compatibility.source_matches) .. " unique_sources=" .. tostring(report.compatibility.unique_sources))
+    if report.net then
+        lithium.info("[LITHIUM][REPORT] net enabled=" .. tostring(report.net.enabled) .. " sends=" .. tostring(report.net.total_sends) .. " bytes=" .. tostring(report.net.total_bytes))
+    end
 
     for i, e in ipairs(report.profiler.top_events) do
         lithium.info(string.format("[LITHIUM][REPORT] TOP_EVENT #%d %s calls=%d time=%.6f", i, e.event, e.calls, e.time))
@@ -287,6 +312,18 @@ local function log_report(report)
     end
     for i, item in ipairs(report.backend.top_fallback_sources or {}) do
         lithium.info("[LITHIUM][REPORT] FALLBACK_SOURCE[" .. i .. "] source=" .. tostring(item.source) .. " bucket=" .. tostring(item.bucket) .. " hits=" .. tostring(item.hits))
+    end
+
+    if report.net then
+        for i, item in ipairs(report.net.top_messages_by_bytes or {}) do
+            lithium.info(string.format("[LITHIUM][REPORT] NET_TOP_BYTES #%d %s sends=%d bytes=%d avg=%.1f max=%d", i, item.name, item.sends, item.bytes, item.avg_bytes, item.max_bytes))
+        end
+        for i, item in ipairs(report.net.top_sources_by_bytes or {}) do
+            lithium.info(string.format("[LITHIUM][REPORT] NET_TOP_SOURCE #%d %s bucket=%s sends=%d bytes=%d", i, item.source, item.bucket, item.sends, item.bytes))
+        end
+        for i, item in ipairs(report.net.top_source_groups or {}) do
+            lithium.info(string.format("[LITHIUM][REPORT] NET_TOP_GROUP #%d %s sends=%d bytes=%d", i, item.bucket, item.sends, item.bytes))
+        end
     end
 end
 
@@ -308,6 +345,19 @@ local function log_tuning_summary(report)
     end
     for i, item in ipairs(t.addon_patch_candidates) do
         lithium.info("[LITHIUM][TUNING] patch_candidate[" .. i .. "] source=" .. tostring(item.source) .. " bucket=" .. tostring(item.bucket) .. " time=" .. tostring(item.time))
+    end
+
+    local n = t.network_candidates
+    if n then
+        for i, item in ipairs(n.broadcast_heavy_messages or {}) do
+            lithium.info("[LITHIUM][TUNING] net_broadcast_heavy[" .. i .. "] msg=" .. tostring(item.name) .. " avg_recipients=" .. tostring(item.avg_recipients) .. " sends=" .. tostring(item.sends))
+        end
+        for i, item in ipairs(n.candidate_event_spam_messages or {}) do
+            lithium.info("[LITHIUM][TUNING] net_event_spam_candidate[" .. i .. "] msg=" .. tostring(item.name) .. " sends=" .. tostring(item.sends) .. " avg_bytes=" .. tostring(item.avg_bytes))
+        end
+        for i, item in ipairs(n.candidate_large_payload_messages or {}) do
+            lithium.info("[LITHIUM][TUNING] net_large_payload_candidate[" .. i .. "] msg=" .. tostring(item.name) .. " max_bytes=" .. tostring(item.max_bytes) .. " avg_bytes=" .. tostring(item.avg_bytes))
+        end
     end
 end
 
@@ -393,6 +443,28 @@ if type(concommand_add) == "function" then
     concommand_add("lithium_hook_backend_status", function() dump_backend_only() end)
     concommand_add("lithium_compat_dump", function() dump_compat_only() end)
     concommand_add("lithium_module_dump", function() dump_modules_only() end)
+
+    concommand_add("lithium_net_dump", function(_, _, args)
+        if not (lithium.net_diagnostics and lithium.net_diagnostics.get_report) then
+            lithium.warn("[NET][DIAG] net.diagnostics module is not loaded (enable lithium_net_diagnostics_*)")
+            return
+        end
+        local limit = tonumber(args and args[1]) or (top_n.GetInt and top_n:GetInt()) or 15
+        local net_report = lithium.net_diagnostics.get_report(limit)
+        lithium.info("[NET][DIAG] enabled=" .. tostring(net_report.enabled) .. " sends=" .. tostring(net_report.total_sends) .. " bytes=" .. tostring(net_report.total_bytes))
+        for i, item in ipairs(net_report.top_messages_by_bytes or {}) do
+            lithium.info(string.format("[NET][DIAG] TOP_BYTES #%d %s sends=%d bytes=%d avg=%.1f max=%d", i, item.name, item.sends, item.bytes, item.avg_bytes, item.max_bytes))
+        end
+    end)
+
+    concommand_add("lithium_net_reset", function()
+        if not (lithium.net_diagnostics and lithium.net_diagnostics.reset) then
+            lithium.warn("[NET][DIAG] net.diagnostics module is not loaded")
+            return
+        end
+        lithium.net_diagnostics.reset()
+        lithium.info("[NET][DIAG] reset")
+    end)
 
     concommand_add("lithium_compat_rules_list", function()
         local registry = lithium.compatibility_registry

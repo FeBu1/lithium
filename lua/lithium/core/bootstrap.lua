@@ -126,6 +126,11 @@ function M.run()
         load = safe_include("lithium/hook/diagnostics.lua")
     })
 
+    loader:register("net.diagnostics", {
+        convar = cvars.bool("net_diagnostics", false, "Enable network diagnostics instrumentation (diagnostics only)", { per_realm = true }),
+        load = safe_include("lithium/net/diagnostics.lua")
+    })
+
     loader:register("legacy.util", {
         convar = cvars.bool("legacy_util", true, "Enable legacy utility helpers", { per_realm = true }),
         load = safe_include("lithium/util.lua")
@@ -187,7 +192,7 @@ function M.run()
     })
 
     local result = loader:load_all({
-        "core.gc", "hook.dispatch", "hook.diagnostics", "legacy.util", "legacy.client_util", "legacy.cache_everything",
+        "core.gc", "hook.dispatch", "hook.diagnostics", "net.diagnostics", "legacy.util", "legacy.client_util", "legacy.cache_everything",
         "legacy.clear_default_hooks", "legacy.convar_spray", "server.addon_patches", "client.gpu_saver", "client.timeout_overlay",
         "client.render.performant_lite"
     })
