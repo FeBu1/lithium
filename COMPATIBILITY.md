@@ -80,3 +80,9 @@ The tuning summary is heuristic-only and intentionally conservative:
 - highlights hot sources without compatibility actions,
 - highlights frequent `observe` sources that may need escalation,
 - highlights possible downgrade candidates where `force_legacy` appears costly but low-risk by telemetry.
+
+## Hostile runtime hardening notes
+
+Lithium now treats Lua global primitives as potentially tampered in large addon packs. Hook migration/export and backend fallback paths localize critical primitives (`pairs`, `ipairs`, `next`, `pcall`, etc.) to survive sandboxed or polluted global environments during startup and runtime fallback.
+
+This is a pack-hardening requirement observed in real sessions, not just a synthetic edge case. If fallback snapshot export fails, dispatcher now degrades to safer migration paths and records the reason in fallback diagnostics instead of hard-crashing mid-migration.

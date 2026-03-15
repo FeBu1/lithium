@@ -138,6 +138,35 @@ local function RunTest()
 		lithium.log("[HOOK] [SELFTEST] Nested remove/replace test OK")
 	end
 
+
+	do
+		lithium.log("[HOOK] [SELFTEST] Hostile global primitives hardening test running")
+		if hook.ExportLithiumHooksInOrder then
+			local old_pairs = _G.pairs
+			local old_ipairs = _G.ipairs
+			local old_next = _G.next
+
+			local ok, err = xpcall(function()
+				_G.pairs = nil
+				_G.ipairs = nil
+				_G.next = nil
+
+				local ok_export, exported = pcall(hook.ExportLithiumHooksInOrder)
+				assert(ok_export and type(exported) == "table", "export should remain available when global iterators are tampered")
+
+				local ok_call = pcall(function() hook.Call(name, {}) end)
+				assert(ok_call, "hook.Call should remain stable when globals are tampered")
+			end, function(e) return tostring(e) end)
+
+			_G.pairs = old_pairs
+			_G.ipairs = old_ipairs
+			_G.next = old_next
+
+			assert(ok, err)
+		end
+		lithium.log("[HOOK] [SELFTEST] Hostile global primitives hardening test OK")
+	end
+
 	do
 		lithium.log("[HOOK] [SELFTEST] Hook with varargs test running")
 		local args_received = false
