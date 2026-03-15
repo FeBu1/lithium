@@ -31,10 +31,16 @@ local function setup_default_rules()
         reason = "ULib known compatibility baseline"
     })
 
-    compatibility.register_source_rule("dlib_source_hook_fallback", {
+    compatibility.register_builtin_source_rule("dlib_source_hook_fallback", {
         source_pattern = "dlib/",
         use_legacy_hook = true,
         reason = "hook.Add caller source matched DLib rule"
+    })
+
+    compatibility.register_builtin_source_rule("observe_glua_postprocess", {
+        source_pattern = "lua/postprocess/",
+        observe_only = true,
+        reason = "Postprocess path observed for telemetry"
     })
 end
 
@@ -73,12 +79,23 @@ function M.run()
 
     include("lithium/core/logging.lua")
     setup_default_rules()
+    local loaded_custom_rules = compatibility.load_custom_rules and compatibility.load_custom_rules() or 0
+    if loaded_custom_rules > 0 then
+        lithium.info("[COMPAT] Loaded custom source rules: " .. tostring(loaded_custom_rules))
+    end
     lithium.compatibility_registry = compatibility
     lithium.hook_dispatcher = dispatcher
 
     local loader = Loader.new()
-    local hook_mode = CreateConVar("lithium_hook_mode", "auto", { FCVAR_ARCHIVE }, "Hook backend mode: auto/fast/legacy")
-    CreateConVar("lithium_hook_selftest_allow_fallback", "0", { FCVAR_ARCHIVE }, "Allow invasive fallback migration self-tests")
+    local create_cvar = CreateConVar
+    local hook_mode
+    if type(create_cvar) == "function" then
+        hook_mode = create_cvar("lithium_hook_mode", "auto", { FCVAR_ARCHIVE }, "Hook backend mode: auto/fast/legacy")
+        create_cvar("lithium_hook_selftest_allow_fallback", "0", { FCVAR_ARCHIVE }, "Allow invasive fallback migration self-tests")
+    else
+        lithium.warn("[CORE][BOOT] CreateConVar unavailable; using default hook mode 'auto'")
+        hook_mode = { GetString = function() return "auto" end }
+    end
 
     loader:register("core.gc", {
         convar = cvars.bool("core_gc", true, "Enable Lithium garbage collector", { per_realm = true }),

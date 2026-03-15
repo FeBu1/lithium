@@ -152,6 +152,20 @@ local function RunTest()
 	end
 
 	do
+		lithium.log("[HOOK] [SELFTEST] Diagnostics source aggregation test running")
+		if hook.ResetLithiumDiagnostics and hook.GetLithiumDiagnostics then
+			hook.ResetLithiumDiagnostics()
+			local event = name .. "_diag_source"
+			hook.Add(event, "diag", function() return nil end)
+			hook.Call(event, {})
+			local diag = hook.GetLithiumDiagnostics()
+			assert(type(diag.by_source) == "table", "diagnostics should expose by_source table")
+			hook.Remove(event, "diag")
+		end
+		lithium.log("[HOOK] [SELFTEST] Diagnostics source aggregation test OK")
+	end
+
+	do
 		lithium.log("[HOOK] [SELFTEST] Gamemode hook test running")
 		GM[name] = function() return "gm_called" end
 

@@ -14,12 +14,43 @@ The registry supports:
 
 - addon name/file pattern matching,
 - per-addon legacy hook mode forcing,
-- per-addon feature disable flags.
+- per-addon feature disable hints,
+- source-path policy matching for `hook.Add` call sites,
+- built-in and custom rule origins.
 
-Initial rules:
+## Rule actions
 
-- DLib-like addons are marked compatibility-sensitive and can force legacy hook backend.
-- ULib is treated as known-compatible baseline.
+Rules are classified by action:
+
+- `force_legacy`: compatibility-sensitive; can force legacy backend/fallback.
+- `feature_hint`: advisory feature disable hint for risky subsystems.
+- `observe`: telemetry-only; records matches without forcing fallback.
+
+## Built-in vs custom rule workflow
+
+- Built-in rules are registered by bootstrap at startup.
+- Custom rules are loaded from `data/lithium/custom_compat_rules.json`.
+- Add custom rules at runtime with:
+  - `lithium_compat_add_custom_rule <id> <source_pattern> [observe|feature_hint|force_legacy] [reason]`
+- Custom rules are persisted via registry save path when file/util APIs are available.
+
+## Telemetry for pack triage
+
+The registry tracks:
+
+- total addon and source matches,
+- built-in vs custom source match counts,
+- action counters (`force_legacy`, `feature_hint`, `observe`),
+- unique matched source count,
+- last addon/source match context,
+- reason hit counters,
+- per-rule hit counters.
+
+Use commands:
+
+- `lithium_compat_dump`
+- `lithium_report_dump`
+- `lithium_report_export`
 
 ## Hook mode policy
 
@@ -34,12 +65,3 @@ ConVar: `lithium_hook_mode`
 - Anything mutating hook internals is treated as sensitive, not "bad".
 - Rendering state mutation is experimental-only and must support rollback.
 - "ConVar spray" optimizers are retained only as opt-in legacy module.
-
-
-## Source policy fallback
-
-In fast hook mode, `hook.Add` caller source is inspected (`debug.getinfo`) and matched against manual source rules.
-If a rule marks the source as compatibility-sensitive, Lithium logs the source/event/hook-id and falls back to the legacy backend while migrating existing hooks.
-
-
-Rules now expose actions: `force_legacy`, `feature_hint`, or `observe` so pack triage can separate hard compatibility constraints from informational matches.

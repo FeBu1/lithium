@@ -1,30 +1,33 @@
 # Module catalog
 
-## Core
+## Safety classification (conservative)
 
-- `core.gc` - periodic garbage collector.
-- `hook.dispatch` - hybrid hook selector and fallback controller.
-- `hook.diagnostics` - low-overhead profiler controls and dump/reset commands.
-- `legacy.util` - existing utility helpers.
-- `legacy.client_util` - client utility helpers.
+### Safe default-on (current evidence)
 
-## Legacy high-risk (default off)
+- `core.gc` - periodic garbage collector scheduler.
+- `hook.dispatch` - hybrid backend selector + guarded fallback.
+- `hook.diagnostics` - telemetry/report commands (low-overhead when profiler disabled).
+- `legacy.util` - utility helpers with broad compatibility history.
+- `legacy.client_util` - client helper utilities.
+- `client.gpu_saver` - optional QoL saver (enabled by default, user-facing behavior).
+- `client.timeout_overlay` - timeout diagnostics overlay.
+
+### Safe but optional
+
+- `hook` profiler sampling via `lithium_hook_profiler_enabled` (off by default).
+
+### Experimental (keep disabled unless explicitly testing)
+
+- `client.render.performant_lite`
+  - Uses files under `lua/lithium/client/render/`.
+  - Soft-cull bookkeeping only in current stage.
+  - Not considered production-safe default behavior yet.
+
+### Dangerous / keep disabled
 
 - `legacy.cache_everything` - global function overrides.
 - `legacy.clear_default_hooks` - default hook removals.
 - `legacy.convar_spray` - broad convar mutation set.
-
-## Client
-
-- `client.gpu_saver` - out-of-focus rendering saver.
-- `client.timeout_overlay` - timeout detection overlay.
-
-## Experimental render
-
-- `client.render.performant_lite`
-  - Uses new files under `lua/lithium/client/render/`.
-  - Starts with soft-cull markers + frame budget.
-  - No aggressive `SetNoDraw` derender as default behavior.
 
 ## Panic disable files
 
@@ -37,13 +40,15 @@ Modules with panic files auto-disable themselves on startup failure by writing `
 - `data/lithium/panic/legacy_convar_spray.txt`
 - `data/lithium/panic/exp_render_performant_lite.txt`
 
-
 ## Diagnostics commands
 
+- `lithium_report_dump [topN]` (combined end-of-session report)
+- `lithium_report_export [topN]` (exports `data/lithium/reports/report_*.json`)
 - `lithium_hook_profiler_dump [topN]`
 - `lithium_hook_profiler_reset`
 - `lithium_hook_profiler_enabled` (ConVar)
-
 - `lithium_hook_backend_status`
 - `lithium_compat_dump`
+- `lithium_compat_rules_list`
 - `lithium_module_dump`
+- `lithium_compat_add_custom_rule <id> <source_pattern> [observe|feature_hint|force_legacy] [reason]`

@@ -34,6 +34,7 @@ Each module has:
 - `lithium_enabled_sv` / `lithium_enabled_cl`: global enable toggle.
 - `lithium_hook_mode`: `auto`, `fast`, or `legacy`.
 - `lithium_samplefps_sv` / `lithium_samplefps_cl`: frame-time sampler.
+- `lithium_report_dump` / `lithium_report_export`: session telemetry report (console/export).
 
 ## Status
 

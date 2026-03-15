@@ -12,9 +12,11 @@ local diagnostics = {
 	next_cv_check = 0,
 	total_calls = 0,
 	total_events = 0,
+	profiler_samples = 0,
 	compatibility_fallbacks = 0,
 	by_event = {},
-	by_hook = {}
+	by_hook = {},
+	by_source = {}
 }
 
 local ErrorNoHaltWithStack = ErrorNoHaltWithStack
@@ -67,9 +69,11 @@ end
 function ResetLithiumDiagnostics()
 	diagnostics.total_calls = 0
 	diagnostics.total_events = 0
+	diagnostics.profiler_samples = 0
 	diagnostics.compatibility_fallbacks = 0
 	diagnostics.by_event = {}
 	diagnostics.by_hook = {}
+	diagnostics.by_source = {}
 end
 
 function AddCompatibilityFallbackCount()
@@ -118,9 +122,27 @@ local function track_call(event, name, elapsed)
 			source = meta and meta.source or "unknown"
 		}
 		diagnostics.by_hook[key] = h
+
+		local source_key = h.source or "unknown"
+		local src = diagnostics.by_source[source_key]
+		if not src then
+			src = { calls = 0, time = 0, hooks = 0 }
+			diagnostics.by_source[source_key] = src
+		end
+		src.hooks = src.hooks + 1
 	end
 	h.calls = h.calls + 1
 	h.time = h.time + elapsed
+
+	local source_key = h.source or "unknown"
+	local src = diagnostics.by_source[source_key]
+	if not src then
+		src = { calls = 0, time = 0, hooks = 0 }
+		diagnostics.by_source[source_key] = src
+	end
+	src.calls = src.calls + 1
+	src.time = src.time + elapsed
+	diagnostics.profiler_samples = diagnostics.profiler_samples + 1
 end
 
 local function mark_event_call()

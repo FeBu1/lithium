@@ -10,6 +10,7 @@ local Dispatcher = {
     fallback_count = 0,
     fallback_events = {},
     fallback_suppressed = 0,
+    migration_count = 0,
     _last_reason = nil,
     _last_reason_time = 0
 }
@@ -70,6 +71,7 @@ function Dispatcher.fallback_to_legacy(reason, context)
     record_fallback(reason, context)
     legacy.enable(migrate_data)
     Dispatcher.active_mode = "legacy"
+    Dispatcher.migration_count = Dispatcher.migration_count + 1
     return true
 end
 
@@ -125,6 +127,7 @@ function Dispatcher.get_stats()
         fallback_count = Dispatcher.fallback_count,
         fallback_events = Dispatcher.fallback_events,
         fallback_suppressed = Dispatcher.fallback_suppressed,
+        migration_count = Dispatcher.migration_count,
         last_error = Dispatcher.last_error
     }
 end
