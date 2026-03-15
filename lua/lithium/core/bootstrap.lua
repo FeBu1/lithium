@@ -66,7 +66,7 @@ function M.run()
         print("[LITHIUM] Startup skipped: disabled by convar")
         return
     end
-    if file.Read("lithium_dontload.txt", "DATA") == "yes" then
+    if file and file.Read and file.Read("lithium_dontload.txt", "DATA") == "yes" then
         print("[LITHIUM] Startup skipped: data/lithium_dontload.txt")
         return
     end
@@ -78,15 +78,20 @@ function M.run()
 
     local loader = Loader.new()
     local hook_mode = CreateConVar("lithium_hook_mode", "auto", { FCVAR_ARCHIVE }, "Hook backend mode: auto/fast/legacy")
+    CreateConVar("lithium_hook_selftest_allow_fallback", "0", { FCVAR_ARCHIVE }, "Allow invasive fallback migration self-tests")
 
     loader:register("core.gc", {
         convar = cvars.bool("core_gc", true, "Enable Lithium garbage collector", { per_realm = true }),
         panic_file = "lithium/panic/core_gc.txt",
         load = function()
-            timer.Create("LITHIUM_garbage_collector", 300, 0, function()
-                collectgarbage("collect")
-                collectgarbage("step", 192)
-            end)
+            if timer and timer.Create then
+                timer.Create("LITHIUM_garbage_collector", 300, 0, function()
+                    collectgarbage("collect")
+                    collectgarbage("step", 192)
+                end)
+            else
+                lithium.warn("[CORE][GC] timer.Create unavailable; GC scheduler not started")
+            end
         end
     })
 
@@ -159,6 +164,7 @@ function M.run()
         "client.render.performant_lite"
     })
 
+    lithium.module_summary = result
     lithium.info("Startup complete. Loaded modules: " .. #result.loaded .. ", Failed modules: " .. #result.failed .. ", Skipped modules: " .. #result.skipped)
     if #result.failed > 0 then
         lithium.warn("Failed module list: " .. table.concat(result.failed, " | "))

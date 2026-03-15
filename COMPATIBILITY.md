@@ -40,3 +40,6 @@ ConVar: `lithium_hook_mode`
 
 In fast hook mode, `hook.Add` caller source is inspected (`debug.getinfo`) and matched against manual source rules.
 If a rule marks the source as compatibility-sensitive, Lithium logs the source/event/hook-id and falls back to the legacy backend while migrating existing hooks.
+
+
+Rules now expose actions: `force_legacy`, `feature_hint`, or `observe` so pack triage can separate hard compatibility constraints from informational matches.

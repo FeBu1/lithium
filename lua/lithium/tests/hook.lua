@@ -279,6 +279,47 @@ local function RunTest()
 
 		lithium.log("[HOOK] [SELFTEST] IsValid-able turning invalid as hook name test OK")
 	end
+
+	do
+		lithium.log("[HOOK] [SELFTEST] Dispatcher fallback migration test running")
+		local cv = GetConVar and GetConVar("lithium_hook_selftest_allow_fallback") or nil
+		if not (cv and cv:GetBool()) then
+			lithium.log("[HOOK] [SELFTEST] Dispatcher fallback migration test skipped (set lithium_hook_selftest_allow_fallback 1 to enable)")
+		elseif not (lithium.hook_dispatcher and lithium.hook_dispatcher.fallback_to_legacy) then
+			lithium.log("[HOOK] [SELFTEST] Dispatcher fallback migration test skipped (dispatcher unavailable)")
+		else
+			local event = name .. "_fallback_migration"
+			local order = {}
+
+			hook.Add(event, "A", function() table.insert(order, "A") end)
+			hook.Add(event, "B", function() table.insert(order, "B") end)
+
+			local switched = lithium.hook_dispatcher.fallback_to_legacy("selftest migration", { event = event })
+			assert(switched == true or switched == false, "fallback_to_legacy should return a boolean")
+
+			hook.Call(event, {})
+			assert(table.concat(order, ",") == "A,B", "Migrated hooks should preserve order and execute")
+
+			hook.Add(event, "B", function() table.insert(order, "B2") end)
+			hook.Add(event, "C", function() table.insert(order, "C") end)
+			hook.Call(event, {})
+			assert(order[#order - 2] == "A" and order[#order - 1] == "B2" and order[#order] == "C", "Post-fallback replacement/add should remain sane")
+
+			local tbl = hook.GetTable()
+			assert(type(tbl[event]) == "table" and type(tbl[event]["A"]) == "function" and type(tbl[event]["B"]) == "function", "GetTable shape should remain valid after fallback")
+
+			local before = lithium.hook_dispatcher.get_stats and lithium.hook_dispatcher.get_stats().fallback_count or 0
+			local switched_again = lithium.hook_dispatcher.fallback_to_legacy("selftest repeated", { event = event })
+			local after = lithium.hook_dispatcher.get_stats and lithium.hook_dispatcher.get_stats().fallback_count or before
+			assert(switched_again == false, "Repeated fallback attempt should be ignored once legacy is active")
+			assert(after == before, "Repeated fallback should not mutate fallback counters")
+
+			hook.Remove(event, "A")
+			hook.Remove(event, "B")
+			hook.Remove(event, "C")
+			lithium.log("[HOOK] [SELFTEST] Dispatcher fallback migration test OK")
+		end
+	end
 end
 
 local success, error_msg = pcall(RunTest)

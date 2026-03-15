@@ -25,7 +25,6 @@ local isfunction = isfunction
 local type = type
 local gmod = gmod
 local table = table
-local string = string
 local tostring = tostring
 local SysTime = SysTime
 local RealTime = RealTime
@@ -45,6 +44,7 @@ function GetULibTable() return hooks end
 function GetLithiumTable() return hooks_table end
 
 local function profile_enabled()
+	if type(RealTime) ~= "function" then return false end
 	if RealTime() < diagnostics.next_cv_check then
 		return diagnostics.enabled_cache
 	end
@@ -56,7 +56,7 @@ local function profile_enabled()
 	end
 
 	local cv = GetConVarFn("lithium_hook_profiler_enabled")
-	diagnostics.enabled_cache = cv and cv:GetBool() or false
+	diagnostics.enabled_cache = cv and cv.GetBool and cv:GetBool() or false
 	return diagnostics.enabled_cache
 end
 
@@ -74,6 +74,23 @@ end
 
 function AddCompatibilityFallbackCount()
 	diagnostics.compatibility_fallbacks = diagnostics.compatibility_fallbacks + 1
+end
+
+-- Ordered export for fast->legacy migration, preserves existing call sequence.
+function ExportLithiumHooksInOrder()
+	local exported = {}
+	for event, event_table in pairs(hooks_table) do
+		local list = {}
+		for i = 6, #event_table, 3 do
+			list[#list + 1] = {
+				name = event_table[i + 2],
+				func = event_table[i],
+				is_string = event_table[i + 1]
+			}
+		end
+		exported[event] = list
+	end
+	return exported
 end
 
 local function track_call(event, name, elapsed)
@@ -224,7 +241,7 @@ end
 local name
 local function call_entry(hook_table, event, i, is_return, arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
 	local hook_name = hook_table[i + 2]
-	local started = profile_enabled() and SysTime() or nil
+	local started = (profile_enabled() and type(SysTime) == "function") and SysTime() or nil
 
 	local a, b, c, d, e, f
 	if hook_table[i + 1] then

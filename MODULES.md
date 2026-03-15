@@ -43,3 +43,7 @@ Modules with panic files auto-disable themselves on startup failure by writing `
 - `lithium_hook_profiler_dump [topN]`
 - `lithium_hook_profiler_reset`
 - `lithium_hook_profiler_enabled` (ConVar)
+
+- `lithium_hook_backend_status`
+- `lithium_compat_dump`
+- `lithium_module_dump`

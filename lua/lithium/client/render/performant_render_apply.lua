@@ -7,6 +7,11 @@ local rv_compat = include("lithium/client/render/performant_render_renderview_co
 
 local state = { last_restore_mismatch = 0, rollback_until = 0 }
 
+-- Experimental only (default disabled):
+-- TODO: add robust class whitelist/blacklist cvars.
+-- TODO: add adaptive frame budget based on measured frametime.
+-- TODO: add restore-mismatch telemetry and persistent rollback strategy.
+
 hook.Add("RenderScene", "LITHIUM_PerformantRenderLite_ViewState", function(origin, angles, fov)
     rv_compat.current_view = { origin = origin, angles = angles, fov = fov, soft_cull_distance_sqr = 225000000 }
 end)

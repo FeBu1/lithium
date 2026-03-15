@@ -30,7 +30,7 @@ function Loader:is_enabled(def)
     if def.convar and not def.convar:GetBool() then
         return false, "disabled by convar " .. def.convar:GetName()
     end
-    if def.panic_file and file.Read(def.panic_file, "DATA") == "1" then
+    if def.panic_file and file and file.Read and file.Read(def.panic_file, "DATA") == "1" then
         return false, "panic disabled by data/" .. def.panic_file
     end
     return true
@@ -73,13 +73,16 @@ function Loader:load_module(name, visiting)
     end
 
     lithium.info("Loading module '" .. name .. "' (" .. describe_module(def) .. ")")
-    local ok, err = xpcall(def.load, debug.traceback)
+    local traceback = debug and debug.traceback or function(e) return tostring(e) end
+    local ok, err = xpcall(def.load, traceback)
     if not ok then
         self.failed[name] = err
         lithium.warn("Module '" .. name .. "' failed (" .. describe_module(def) .. "): " .. tostring(err))
-        if def.panic_file then
+        if def.panic_file and file and file.Write then
             file.Write(def.panic_file, "1")
             lithium.warn("Panic flag written for '" .. name .. "' at data/" .. def.panic_file)
+        elseif def.panic_file then
+            lithium.warn("Panic flag not written for '" .. name .. "' (file.Write unavailable)")
         end
         visiting[name] = nil
         return false
