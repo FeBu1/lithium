@@ -65,3 +65,18 @@ ConVar: `lithium_hook_mode`
 - Anything mutating hook internals is treated as sensitive, not "bad".
 - Rendering state mutation is experimental-only and must support rollback.
 - "ConVar spray" optimizers are retained only as opt-in legacy module.
+
+
+## Tuning workflow from telemetry
+
+Use:
+
+- `lithium_report_dump` for readable session telemetry
+- `lithium_tuning_summary` for heuristic suggestions
+- `lithium_report_export` for structured JSON snapshots
+
+The tuning summary is heuristic-only and intentionally conservative:
+- flags potentially overbroad `force_legacy` rules,
+- highlights hot sources without compatibility actions,
+- highlights frequent `observe` sources that may need escalation,
+- highlights possible downgrade candidates where `force_legacy` appears costly but low-risk by telemetry.

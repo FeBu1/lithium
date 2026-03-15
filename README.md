@@ -35,6 +35,7 @@ Each module has:
 - `lithium_hook_mode`: `auto`, `fast`, or `legacy`.
 - `lithium_samplefps_sv` / `lithium_samplefps_cl`: frame-time sampler.
 - `lithium_report_dump` / `lithium_report_export`: session telemetry report (console/export).
+- `lithium_tuning_summary`: heuristic compatibility tuning suggestions.
 
 ## Status
 

@@ -14,10 +14,12 @@ local Registry = {
         feature_hint_matches = 0,
         observe_matches = 0,
         unique_source_set = {},
+        source_actions_by_source = {},
         unique_sources = 0,
         last_source_match = nil,
         last_addon_match = nil,
-        reasons = {}
+        reasons = {},
+        source_rule_meta = {}
     }
 }
 
@@ -75,6 +77,12 @@ local function register_source_rule_internal(id, rule, origin)
     rule.id = id
     rule.origin = origin or rule.origin or "builtin"
     Registry.sources[id] = rule
+    Registry.stats.source_rule_meta[id] = {
+        action = rule_action(rule),
+        origin = rule.origin,
+        source_pattern = rule.source_pattern or "",
+        reason = rule.reason or ""
+    }
 end
 
 function Registry.register_addon_rule(id, rule)
@@ -166,6 +174,19 @@ function Registry.evaluate_source(source, event, name)
             else
                 Registry.stats.source_match_builtin = Registry.stats.source_match_builtin + 1
             end
+
+            local source_key = tostring(source or "unknown")
+            local source_actions = Registry.stats.source_actions_by_source[source_key]
+            if not source_actions then
+                source_actions = {
+                    force_legacy = 0,
+                    feature_hint = 0,
+                    observe = 0
+                }
+                Registry.stats.source_actions_by_source[source_key] = source_actions
+            end
+            source_actions[action] = (source_actions[action] or 0) + 1
+
             bump_reason(reason)
             bump_action(action)
             mark_unique_source(source)

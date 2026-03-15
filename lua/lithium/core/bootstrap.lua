@@ -156,6 +156,17 @@ function M.run()
         load = safe_include("lithium/convars.lua")
     })
 
+    loader:register("server.addon_patches", {
+        convar = cvars.bool("server_addon_patches", true, "Enable targeted addon patch framework", { per_realm = true }),
+        load = function()
+            local mod = include("lithium/server/addon_patches.lua")
+            if mod and mod.apply_all then
+                mod.apply_all()
+                lithium.addon_patch_summary = mod.get_summary and mod.get_summary() or nil
+            end
+        end
+    })
+
     loader:register("client.gpu_saver", {
         realm = "client",
         convar = cvars.bool("client_gpu_saver", true, "Enable GPU saver", { server = false, per_realm = true }),
@@ -177,7 +188,7 @@ function M.run()
 
     local result = loader:load_all({
         "core.gc", "hook.dispatch", "hook.diagnostics", "legacy.util", "legacy.client_util", "legacy.cache_everything",
-        "legacy.clear_default_hooks", "legacy.convar_spray", "client.gpu_saver", "client.timeout_overlay",
+        "legacy.clear_default_hooks", "legacy.convar_spray", "server.addon_patches", "client.gpu_saver", "client.timeout_overlay",
         "client.render.performant_lite"
     })
 

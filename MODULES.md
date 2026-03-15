@@ -9,6 +9,7 @@
 - `hook.diagnostics` - telemetry/report commands (low-overhead when profiler disabled).
 - `legacy.util` - utility helpers with broad compatibility history.
 - `legacy.client_util` - client helper utilities.
+- `server.addon_patches` - targeted patch framework (default enabled, no invasive patches enabled by default).
 - `client.gpu_saver` - optional QoL saver (enabled by default, user-facing behavior).
 - `client.timeout_overlay` - timeout diagnostics overlay.
 
@@ -43,6 +44,7 @@ Modules with panic files auto-disable themselves on startup failure by writing `
 ## Diagnostics commands
 
 - `lithium_report_dump [topN]` (combined end-of-session report)
+- `lithium_tuning_summary [topN]` (heuristic tuning suggestions)
 - `lithium_report_export [topN]` (exports `data/lithium/reports/report_*.json`)
 - `lithium_hook_profiler_dump [topN]`
 - `lithium_hook_profiler_reset`
@@ -51,4 +53,5 @@ Modules with panic files auto-disable themselves on startup failure by writing `
 - `lithium_compat_dump`
 - `lithium_compat_rules_list`
 - `lithium_module_dump`
+- `lithium_patch_dump`
 - `lithium_compat_add_custom_rule <id> <source_pattern> [observe|feature_hint|force_legacy] [reason]`
