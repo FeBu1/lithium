@@ -1,5 +1,40 @@
 require("lithium")
 
+local _G = _G
+local string = string
+local table = table
+local math = math
+
+local type = type
+local tostring = tostring
+local tonumber = tonumber
+local next_fn = next or (_G and _G.next)
+
+local function fallback_pairs(t)
+    local function iter(tbl, k)
+        return next_fn and next_fn(tbl, k) or nil
+    end
+    return iter, t, nil
+end
+
+local function fallback_ipairs(t)
+    local function iter(tbl, i)
+        i = i + 1
+        local v = tbl[i]
+        if v ~= nil then
+            return i, v
+        end
+    end
+    return iter, t, 0
+end
+
+local pairs_fn = pairs or (_G and _G.pairs) or fallback_pairs
+local ipairs_fn = ipairs or (_G and _G.ipairs) or fallback_ipairs
+local table_sort = table.sort
+local math_min = math.min
+local math_max = math.max
+local math_ceil = math.ceil
+
 local M = {
     wrapped = false,
     originals = {},
@@ -56,12 +91,12 @@ end
 
 local function top_from_map(map, mapfn, sorter, limit)
     local out = {}
-    for k, v in pairs(map or {}) do
+    for k, v in pairs_fn(map or {}) do
         out[#out + 1] = mapfn(k, v)
     end
-    table.sort(out, sorter)
+    table_sort(out, sorter)
     local capped = {}
-    for i = 1, math.min(limit, #out) do
+    for i = 1, math_min(limit, #out) do
         capped[#capped + 1] = out[i]
     end
     return capped
@@ -71,7 +106,7 @@ local function count_recipients(target)
     if target == nil then return -1 end
     if type(target) == "table" then
         local c = 0
-        for _, _ in pairs(target) do c = c + 1 end
+        for _, _ in pairs_fn(target) do c = c + 1 end
         return c
     end
     return 1
@@ -81,7 +116,7 @@ local function bytes_written()
     if not net or type(net.BytesWritten) ~= "function" then return 0 end
     local bits = net.BytesWritten()
     if type(bits) ~= "number" then return 0 end
-    return math.ceil(bits / 8)
+    return math_ceil(bits / 8)
 end
 
 local function mark_send(mode, recipients)
@@ -118,7 +153,7 @@ local function mark_send(mode, recipients)
     end
     msg.sends = msg.sends + 1
     msg.bytes = msg.bytes + bytes
-    msg.max_bytes = math.max(msg.max_bytes, bytes)
+    msg.max_bytes = math_max(msg.max_bytes, bytes)
     msg.modes[mode] = (msg.modes[mode] or 0) + 1
     if recipients and recipients >= 0 then
         msg.recipients_total = msg.recipients_total + recipients
@@ -187,7 +222,7 @@ local function wrap_net()
         net.SendOmit = function(target, ...)
             local total = player and player.GetCount and player.GetCount() or -1
             local omitted = count_recipients(target)
-            local recipients = (total >= 0 and omitted >= 0) and math.max(0, total - omitted) or -1
+            local recipients = (total >= 0 and omitted >= 0) and math_max(0, total - omitted) or -1
             mark_send("send_omit", recipients)
             return M.originals.SendOmit(target, ...)
         end
@@ -259,7 +294,7 @@ function M.get_report(limit)
     end, function(a, b) return a.bytes > b.bytes end, limit)
 
     local source_groups = {}
-    for _, item in pairs(M.stats.by_source) do
+    for _, item in pairs_fn(M.stats.by_source) do
         local g = source_groups[item.bucket] or { bytes = 0, sends = 0 }
         g.bytes = g.bytes + item.bytes
         g.sends = g.sends + item.sends
@@ -273,7 +308,7 @@ function M.get_report(limit)
     local broadcast_heavy = {}
     local too_frequent = {}
     local too_large = {}
-    for _, item in ipairs(top_by_bytes) do
+    for _, item in ipairs_fn(top_by_bytes) do
         if item.avg_recipients >= 8 or item.avg_recipients == -1 then
             broadcast_heavy[#broadcast_heavy + 1] = item
         end

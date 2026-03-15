@@ -57,5 +57,6 @@ Modules with panic files auto-disable themselves on startup failure by writing `
 - `lithium_module_dump`
 - `lithium_net_dump [topN]`
 - `lithium_net_reset`
+- `lithium_report_compare <reportA> <reportB> [topN]`
 - `lithium_patch_dump`
 - `lithium_compat_add_custom_rule <id> <source_pattern> [observe|feature_hint|force_legacy] [reason]`

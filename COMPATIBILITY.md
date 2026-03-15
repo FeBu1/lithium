@@ -86,3 +86,14 @@ The tuning summary is heuristic-only and intentionally conservative:
 Lithium now treats Lua global primitives as potentially tampered in large addon packs. Hook migration/export and backend fallback paths localize critical primitives (`pairs`, `ipairs`, `next`, `pcall`, etc.) to survive sandboxed or polluted global environments during startup and runtime fallback.
 
 This is a pack-hardening requirement observed in real sessions, not just a synthetic edge case. If fallback snapshot export fails, dispatcher now degrades to safer migration paths and records the reason in fallback diagnostics instead of hard-crashing mid-migration.
+
+
+## Session comparison workflow
+
+Use report export + compare in real pack testing:
+
+1. Run a baseline session and export (`lithium_report_export`).
+2. Run a problematic/cursed session and export again.
+3. Compare with `lithium_report_compare <baseline.json> <cursed.json> [topN]`.
+
+The compare summary prioritizes largest deltas (events, sources, net traffic, fallback/rule hits) and newly appeared hot sources/rule matches/patch candidates so large-pack regressions are easier to triage.

@@ -2,9 +2,47 @@ require("lithium")
 
 local M = {}
 
+local _G = _G
+local string = string
+local table = table
+local math = math
+local os = os
+local util = util
+local file = file
+local game = game
+local player = player
+local concommand = concommand
+
+local type = type
+local tostring = tostring
+local tonumber = tonumber
+local next_fn = next or (_G and _G.next)
+
+local function fallback_pairs(t)
+    local function iter(tbl, k)
+        return next_fn and next_fn(tbl, k) or nil
+    end
+    return iter, t, nil
+end
+
+local function fallback_ipairs(t)
+    local function iter(tbl, i)
+        i = i + 1
+        local v = tbl[i]
+        if v ~= nil then
+            return i, v
+        end
+    end
+    return iter, t, 0
+end
+
+local pairs_fn = pairs or (_G and _G.pairs) or fallback_pairs
+local ipairs_fn = ipairs or (_G and _G.ipairs) or fallback_ipairs
+
 local GetConVarFn = GetConVar
 local CreateConVarFn = CreateConVar
 local concommand_add = concommand and concommand.Add
+local compare_tool = include("lithium/report/compare.lua")
 
 local function safe_bool(cvar_name, default)
     if type(GetConVarFn) == "function" then
@@ -30,6 +68,30 @@ end
 
 local enabled = safe_bool("lithium_hook_profiler_enabled", false)
 local top_n = safe_num("lithium_hook_profiler_topn", 15)
+local report_label = nil
+local report_mode = nil
+
+local function safe_str(cvar_name, default)
+    if type(GetConVarFn) == "function" then
+        local cv = GetConVarFn(cvar_name)
+        if cv then return cv end
+    end
+    if type(CreateConVarFn) == "function" then
+        return CreateConVarFn(cvar_name, tostring(default or ""), { FCVAR_ARCHIVE }, "Lithium hook diagnostics text value")
+    end
+    return { GetString = function() return tostring(default or "") end }
+end
+
+report_label = safe_str("lithium_report_label", "")
+report_mode = safe_str("lithium_report_mode", "")
+
+local function cvar_string(cv, default)
+    if cv and cv.GetString then
+        local value = cv:GetString()
+        if value ~= nil and value ~= "" then return tostring(value) end
+    end
+    return default
+end
 
 local function source_bucket(path)
     path = tostring(path or "unknown")
@@ -44,7 +106,7 @@ end
 
 local function top_from_map(map, mapfn, sorter, limit)
     local out = {}
-    for k, v in pairs(map or {}) do
+    for k, v in pairs_fn(map or {}) do
         out[#out + 1] = mapfn(k, v)
     end
     table.sort(out, sorter)
@@ -82,7 +144,11 @@ local function build_header(disp, compat, diag)
         compat_matches = compat.source_matches or 0,
         profiler_samples = diag.profiler_samples or 0,
         total_calls = diag.total_calls or 0,
-        total_events = diag.total_events or 0
+        total_events = diag.total_events or 0,
+        session_label = cvar_string(report_label, ""),
+        session_mode = cvar_string(report_mode, ""),
+        realm = SERVER and "server" or (CLIENT and "client" or "unknown"),
+        singleplayer = game and game.SinglePlayer and game.SinglePlayer() or false
     }
 end
 
@@ -100,7 +166,7 @@ local function build_tuning_suggestions(diag, disp, compat, limit)
     local source_rule_hits = compat.source_match_rules or {}
     local source_rule_meta = compat.source_rule_meta or {}
 
-    for rule_id, hits in pairs(source_rule_hits) do
+    for rule_id, hits in pairs_fn(source_rule_hits) do
         local meta = source_rule_meta[rule_id]
         if meta and meta.action == "force_legacy" and hits >= 25 and (disp.migration_count or 0) == 0 then
             suggestions.likely_overbroad_legacy_rules[#suggestions.likely_overbroad_legacy_rules + 1] = {
@@ -118,12 +184,12 @@ local function build_tuning_suggestions(diag, disp, compat, limit)
     end, function(a, b) return a.time > b.time end, limit)
 
     local fallback_by_source = {}
-    for _, item in ipairs(disp.fallback_events or {}) do
+    for _, item in ipairs_fn(disp.fallback_events or {}) do
         local src = item.context and item.context.source or "unknown"
         fallback_by_source[src] = (fallback_by_source[src] or 0) + 1
     end
 
-    for _, s in ipairs(top_sources) do
+    for _, s in ipairs_fn(top_sources) do
         local actions = source_actions[s.source]
         if not actions then
             suggestions.hot_sources_no_compat_action[#suggestions.hot_sources_no_compat_action + 1] = {
@@ -195,7 +261,7 @@ local function build_report(limit)
     end, function(a, b) return a.time > b.time end, limit)
 
     local source_groups = {}
-    for source, item in pairs(diag.by_source or {}) do
+    for source, item in pairs_fn(diag.by_source or {}) do
         local bucket = source_bucket(source)
         local g = source_groups[bucket] or { time = 0, calls = 0, hooks = 0 }
         g.time = g.time + (item.time or 0)
@@ -219,7 +285,7 @@ local function build_report(limit)
     end, function(a, b) return a.hits > b.hits end, 64)
 
     local fallback_by_source = {}
-    for _, item in ipairs((disp and disp.fallback_events) or {}) do
+    for _, item in ipairs_fn((disp and disp.fallback_events) or {}) do
         local src = item.context and item.context.source or "unknown"
         fallback_by_source[src] = (fallback_by_source[src] or 0) + 1
     end
@@ -284,7 +350,7 @@ end
 
 local function log_report(report)
     lithium.info("[LITHIUM][REPORT] === Session report ===")
-    lithium.info("[LITHIUM][REPORT] header map=" .. tostring(report.header.map) .. " players=" .. tostring(report.header.player_count) .. " backend=" .. tostring(report.header.backend_mode))
+    lithium.info("[LITHIUM][REPORT] header map=" .. tostring(report.header.map) .. " players=" .. tostring(report.header.player_count) .. " backend=" .. tostring(report.header.backend_mode) .. " label=" .. tostring(report.header.session_label or "") .. " mode=" .. tostring(report.header.session_mode or ""))
     lithium.info("[LITHIUM][REPORT] backend mode=" .. tostring(report.backend.mode) .. " fallback_count=" .. tostring(report.backend.fallback_count) .. " migrations=" .. tostring(report.backend.migration_count or 0) .. " suppressed=" .. tostring(report.backend.fallback_suppressed))
     lithium.info("[LITHIUM][REPORT] modules loaded=" .. tostring(#report.modules.loaded) .. " skipped=" .. tostring(#report.modules.skipped) .. " failed=" .. tostring(#report.modules.failed))
     lithium.info("[LITHIUM][REPORT] patches total=" .. tostring(report.patches.total) .. " applied=" .. tostring(report.patches.applied) .. " failed=" .. tostring(report.patches.failed))
@@ -294,34 +360,34 @@ local function log_report(report)
         lithium.info("[LITHIUM][REPORT] net enabled=" .. tostring(report.net.enabled) .. " sends=" .. tostring(report.net.total_sends) .. " bytes=" .. tostring(report.net.total_bytes))
     end
 
-    for i, e in ipairs(report.profiler.top_events) do
+    for i, e in ipairs_fn(report.profiler.top_events) do
         lithium.info(string.format("[LITHIUM][REPORT] TOP_EVENT #%d %s calls=%d time=%.6f", i, e.event, e.calls, e.time))
     end
-    for i, h in ipairs(report.profiler.top_hooks) do
+    for i, h in ipairs_fn(report.profiler.top_hooks) do
         lithium.info(string.format("[LITHIUM][REPORT] TOP_HOOK #%d %s calls=%d time=%.6f source=%s", i, h.key, h.calls, h.time, h.source))
     end
-    for i, s in ipairs(report.profiler.top_sources) do
+    for i, s in ipairs_fn(report.profiler.top_sources) do
         lithium.info(string.format("[LITHIUM][REPORT] TOP_SOURCE #%d %s bucket=%s calls=%d hooks=%d time=%.6f", i, s.source, s.bucket, s.calls, s.hooks, s.time))
     end
-    for i, g in ipairs(report.profiler.top_source_groups or {}) do
+    for i, g in ipairs_fn(report.profiler.top_source_groups or {}) do
         lithium.info(string.format("[LITHIUM][REPORT] TOP_GROUP #%d %s calls=%d hooks=%d time=%.6f", i, g.bucket, g.calls, g.hooks, g.time))
     end
     for i = 1, math.min(10, #report.backend.fallback_events) do
         local item = report.backend.fallback_events[#report.backend.fallback_events - i + 1]
         lithium.info("[LITHIUM][REPORT] FALLBACK[" .. i .. "] reason=" .. tostring(item.reason) .. " when=" .. tostring(item.when))
     end
-    for i, item in ipairs(report.backend.top_fallback_sources or {}) do
+    for i, item in ipairs_fn(report.backend.top_fallback_sources or {}) do
         lithium.info("[LITHIUM][REPORT] FALLBACK_SOURCE[" .. i .. "] source=" .. tostring(item.source) .. " bucket=" .. tostring(item.bucket) .. " hits=" .. tostring(item.hits))
     end
 
     if report.net then
-        for i, item in ipairs(report.net.top_messages_by_bytes or {}) do
+        for i, item in ipairs_fn(report.net.top_messages_by_bytes or {}) do
             lithium.info(string.format("[LITHIUM][REPORT] NET_TOP_BYTES #%d %s sends=%d bytes=%d avg=%.1f max=%d", i, item.name, item.sends, item.bytes, item.avg_bytes, item.max_bytes))
         end
-        for i, item in ipairs(report.net.top_sources_by_bytes or {}) do
+        for i, item in ipairs_fn(report.net.top_sources_by_bytes or {}) do
             lithium.info(string.format("[LITHIUM][REPORT] NET_TOP_SOURCE #%d %s bucket=%s sends=%d bytes=%d", i, item.source, item.bucket, item.sends, item.bytes))
         end
-        for i, item in ipairs(report.net.top_source_groups or {}) do
+        for i, item in ipairs_fn(report.net.top_source_groups or {}) do
             lithium.info(string.format("[LITHIUM][REPORT] NET_TOP_GROUP #%d %s sends=%d bytes=%d", i, item.bucket, item.sends, item.bytes))
         end
     end
@@ -331,31 +397,31 @@ local function log_tuning_summary(report)
     local t = report.tuning_suggestions
     lithium.info("[LITHIUM][TUNING] heuristic summary (suggestions, not truth)")
 
-    for i, item in ipairs(t.likely_overbroad_legacy_rules) do
+    for i, item in ipairs_fn(t.likely_overbroad_legacy_rules) do
         lithium.info("[LITHIUM][TUNING] overbroad_rule[" .. i .. "] id=" .. tostring(item.rule_id) .. " hits=" .. tostring(item.hits) .. " reason=" .. tostring(item.reason))
     end
-    for i, item in ipairs(t.hot_sources_no_compat_action) do
+    for i, item in ipairs_fn(t.hot_sources_no_compat_action) do
         lithium.info("[LITHIUM][TUNING] hot_no_action[" .. i .. "] source=" .. tostring(item.source) .. " time=" .. tostring(item.time))
     end
-    for i, item in ipairs(t.observe_sources_maybe_escalate) do
+    for i, item in ipairs_fn(t.observe_sources_maybe_escalate) do
         lithium.info("[LITHIUM][TUNING] observe_escalate[" .. i .. "] source=" .. tostring(item.source) .. " observe_hits=" .. tostring(item.observe_hits) .. " time=" .. tostring(item.time))
     end
-    for i, item in ipairs(t.force_legacy_sources_maybe_downgrade) do
+    for i, item in ipairs_fn(t.force_legacy_sources_maybe_downgrade) do
         lithium.info("[LITHIUM][TUNING] legacy_downgrade[" .. i .. "] source=" .. tostring(item.source) .. " force_hits=" .. tostring(item.force_legacy_hits) .. " time=" .. tostring(item.time))
     end
-    for i, item in ipairs(t.addon_patch_candidates) do
+    for i, item in ipairs_fn(t.addon_patch_candidates) do
         lithium.info("[LITHIUM][TUNING] patch_candidate[" .. i .. "] source=" .. tostring(item.source) .. " bucket=" .. tostring(item.bucket) .. " time=" .. tostring(item.time))
     end
 
     local n = t.network_candidates
     if n then
-        for i, item in ipairs(n.broadcast_heavy_messages or {}) do
+        for i, item in ipairs_fn(n.broadcast_heavy_messages or {}) do
             lithium.info("[LITHIUM][TUNING] net_broadcast_heavy[" .. i .. "] msg=" .. tostring(item.name) .. " avg_recipients=" .. tostring(item.avg_recipients) .. " sends=" .. tostring(item.sends))
         end
-        for i, item in ipairs(n.candidate_event_spam_messages or {}) do
+        for i, item in ipairs_fn(n.candidate_event_spam_messages or {}) do
             lithium.info("[LITHIUM][TUNING] net_event_spam_candidate[" .. i .. "] msg=" .. tostring(item.name) .. " sends=" .. tostring(item.sends) .. " avg_bytes=" .. tostring(item.avg_bytes))
         end
-        for i, item in ipairs(n.candidate_large_payload_messages or {}) do
+        for i, item in ipairs_fn(n.candidate_large_payload_messages or {}) do
             lithium.info("[LITHIUM][TUNING] net_large_payload_candidate[" .. i .. "] msg=" .. tostring(item.name) .. " max_bytes=" .. tostring(item.max_bytes) .. " avg_bytes=" .. tostring(item.avg_bytes))
         end
     end
@@ -431,6 +497,30 @@ if type(concommand_add) == "function" then
         end
     end)
 
+    concommand_add("lithium_report_compare", function(_, _, args)
+        if not compare_tool or not compare_tool.compare_from_paths then
+            lithium.warn("[LITHIUM][COMPARE] compare utility unavailable")
+            return
+        end
+
+        local path_a = tostring(args and args[1] or "")
+        local path_b = tostring(args and args[2] or "")
+        local limit = tonumber(args and args[3]) or (top_n.GetInt and top_n:GetInt()) or 15
+
+        if path_a == "" or path_b == "" then
+            lithium.warn("[LITHIUM][COMPARE] Usage: lithium_report_compare <reportA> <reportB> [topN]")
+            return
+        end
+
+        local ok, summary = compare_tool.compare_from_paths(path_a, path_b, limit)
+        if not ok then
+            lithium.warn("[LITHIUM][COMPARE] failed: " .. tostring(summary))
+            return
+        end
+
+        compare_tool.log_summary(summary)
+    end)
+
     concommand_add("lithium_hook_profiler_reset", function()
         if not hook.ResetLithiumDiagnostics then
             lithium.warn("[HOOK][PROF] Reset unavailable in current hook backend")
@@ -452,7 +542,7 @@ if type(concommand_add) == "function" then
         local limit = tonumber(args and args[1]) or (top_n.GetInt and top_n:GetInt()) or 15
         local net_report = lithium.net_diagnostics.get_report(limit)
         lithium.info("[NET][DIAG] enabled=" .. tostring(net_report.enabled) .. " sends=" .. tostring(net_report.total_sends) .. " bytes=" .. tostring(net_report.total_bytes))
-        for i, item in ipairs(net_report.top_messages_by_bytes or {}) do
+        for i, item in ipairs_fn(net_report.top_messages_by_bytes or {}) do
             lithium.info(string.format("[NET][DIAG] TOP_BYTES #%d %s sends=%d bytes=%d avg=%.1f max=%d", i, item.name, item.sends, item.bytes, item.avg_bytes, item.max_bytes))
         end
     end)
@@ -475,7 +565,7 @@ if type(concommand_add) == "function" then
         end
 
         local rows = {}
-        for id, rule in pairs(rules) do
+        for id, rule in pairs_fn(rules) do
             rows[#rows + 1] = {
                 id = id,
                 origin = rule.origin or "builtin",
@@ -484,7 +574,7 @@ if type(concommand_add) == "function" then
             }
         end
         table.sort(rows, function(a, b) return a.id < b.id end)
-        for _, row in ipairs(rows) do
+        for _, row in ipairs_fn(rows) do
             lithium.info("[COMPAT][RULE] id=" .. row.id .. " origin=" .. row.origin .. " action=" .. row.action .. " source_pattern=" .. row.source_pattern)
         end
     end)
