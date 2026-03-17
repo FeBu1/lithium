@@ -10,32 +10,41 @@ local function RunTest()
 		local ret = 0
 		lithium.log("[HOOK] [SELFTEST] Basic hook test running")
 
-		GM[name] = function(_, ret) return ret end
+		GM[name] = function(_, ret_) return ret_ end
 		local ran = false
 		hook.Add(name, "1", function()
 			ran = true
 		end)
 
-		local ret = hook.Call(name, GM, 1)
+		ret = hook.Call(name, GM, 1)
 
 		assert(ran == true, "hook.Call didn't run the hook")
 		assert(ret == 1, "hook.Call didn't run the gamemode function or returned the wrong value")
 		lithium.log("[HOOK] [SELFTEST] Basic hook test OK")
-		-- Remove wasn't tested yet, don't clean up
+	end
+
+	do
+		lithium.log("[HOOK] [SELFTEST] hook.GetTable compatibility shape test running")
+		local event = name .. "_gettable"
+		hook.Add(event, "tableShape", function() end)
+		local tbl = hook.GetTable()
+		assert(type(tbl) == "table", "hook.GetTable should return a table")
+		assert(type(tbl[event]) == "table", "hook.GetTable should contain event table")
+		assert(type(tbl[event]["tableShape"]) == "function", "hook.GetTable should map id -> function")
+		hook.Remove(event, "tableShape")
+		lithium.log("[HOOK] [SELFTEST] hook.GetTable compatibility shape test OK")
 	end
 
 	do
 		lithium.log("[HOOK] [SELFTEST] Hook order test running")
 		local order = {}
 		for i = 1, 3 do
-			---@diagnostic disable-next-line: redundant-parameter
 			hook.Add(name, tostring(i), function() table.insert(order, tostring(i)) end, HOOK_NORMAL)
 		end
 		hook.Call(name, {})
 
 		assert(table.concat(order) == "123", "Hooks with the same priority did not execute in order of addition (got "..table.concat(order)..")")
 		lithium.log("[HOOK] [SELFTEST] Hook order test OK")
-		-- Remove wasn't tested yet, don't clean up
 	end
 
 	do
@@ -50,7 +59,6 @@ local function RunTest()
 
 		assert(not table.HasValue(executed, "hook1"), "Removed hook should not execute")
 		lithium.log("[HOOK] [SELFTEST] Hook removal test OK")
-		-- Remove is OK, we can now clean up after ourselves
 		hook.Remove(name, "2")
 		hook.Remove(name, "3")
 	end
@@ -109,9 +117,59 @@ local function RunTest()
 	end
 
 	do
+		lithium.log("[HOOK] [SELFTEST] Nested remove/replace test running")
+		local event = name .. "_nested_mut"
+		local sequence = {}
+		hook.Add(event, "first", function()
+			table.insert(sequence, "first")
+			hook.Remove(event, "second")
+			hook.Add(event, "third", function() table.insert(sequence, "third") end)
+		end)
+		hook.Add(event, "second", function() table.insert(sequence, "second") end)
+
+		hook.Call(event, {})
+		assert(table.concat(sequence, ",") == "first", "second should be removed during iteration and third should not run in same pass")
+		sequence = {}
+		hook.Call(event, {})
+		assert(table.concat(sequence, ",") == "first,third", "new hook should run on following call")
+		hook.Remove(event, "first")
+		hook.Remove(event, "second")
+		hook.Remove(event, "third")
+		lithium.log("[HOOK] [SELFTEST] Nested remove/replace test OK")
+	end
+
+
+	do
+		lithium.log("[HOOK] [SELFTEST] Hostile global primitives hardening test running")
+		if hook.ExportLithiumHooksInOrder then
+			local old_pairs = _G.pairs
+			local old_ipairs = _G.ipairs
+			local old_next = _G.next
+
+			local ok, err = xpcall(function()
+				_G.pairs = nil
+				_G.ipairs = nil
+				_G.next = nil
+
+				local ok_export, exported = pcall(hook.ExportLithiumHooksInOrder)
+				assert(ok_export and type(exported) == "table", "export should remain available when global iterators are tampered")
+
+				local ok_call = pcall(function() hook.Call(name, {}) end)
+				assert(ok_call, "hook.Call should remain stable when globals are tampered")
+			end, function(e) return tostring(e) end)
+
+			_G.pairs = old_pairs
+			_G.ipairs = old_ipairs
+			_G.next = old_next
+
+			assert(ok, err)
+		end
+		lithium.log("[HOOK] [SELFTEST] Hostile global primitives hardening test OK")
+	end
+
+	do
 		lithium.log("[HOOK] [SELFTEST] Hook with varargs test running")
 		local args_received = false
-		---@diagnostic disable-next-line: cast-local-type
 		hook.Add(name, "varargs", function(...) args_received = {...} end)
 
 		hook.Call(name, {}, 1, 2, 3)
@@ -120,6 +178,20 @@ local function RunTest()
 
 		lithium.log("[HOOK] [SELFTEST] Hook with varargs test OK")
 		hook.Remove(name, "varargs")
+	end
+
+	do
+		lithium.log("[HOOK] [SELFTEST] Diagnostics source aggregation test running")
+		if hook.ResetLithiumDiagnostics and hook.GetLithiumDiagnostics then
+			hook.ResetLithiumDiagnostics()
+			local event = name .. "_diag_source"
+			hook.Add(event, "diag", function() return nil end)
+			hook.Call(event, {})
+			local diag = hook.GetLithiumDiagnostics()
+			assert(type(diag.by_source) == "table", "diagnostics should expose by_source table")
+			hook.Remove(event, "diag")
+		end
+		lithium.log("[HOOK] [SELFTEST] Diagnostics source aggregation test OK")
 	end
 
 	do
@@ -136,7 +208,6 @@ local function RunTest()
 		lithium.log("[HOOK] [SELFTEST] High priority hook running before GM test running")
 		GM[name] = function() return "gm_not_called" end
 		local returnValue = nil
-		---@diagnostic disable-next-line: redundant-parameter
 		hook.Add(name, "PreHookReturn", function() return "pre_returned" end, HOOK_HIGH)
 
 		returnValue = hook.Call(name, GM)
@@ -150,9 +221,7 @@ local function RunTest()
 		lithium.log("[HOOK] [SELFTEST] Different priority hooks run test running")
 		local normal_hook_ran = false
 		local post_hook_ran = false
-		---@diagnostic disable-next-line: redundant-parameter
 		hook.Add(name, "normalhook", function() normal_hook_ran = true end, HOOK_NORMAL)
-		---@diagnostic disable-next-line: redundant-parameter
 		hook.Add(name, "posthook", function() post_hook_ran = true end, HOOK_LOW)
 
 		hook.Call(name, {})
@@ -167,9 +236,7 @@ local function RunTest()
 		lithium.log("[HOOK] [SELFTEST] Removing hook in call test running")
 		local hookran = false
 		local function removing_hook() hook.Remove(name, "dynamicHook") end
-		---@diagnostic disable-next-line: redundant-parameter
 		hook.Add(name, "removing_hook", removing_hook, HOOK_HIGH)
-		---@diagnostic disable-next-line: redundant-parameter
 		hook.Add(name, "dynamicHook", function() hookran = true end, HOOK_NORMAL)
 
 		hook.Call(name, {})
@@ -182,8 +249,6 @@ local function RunTest()
 
 	do
 		lithium.log("[HOOK] [SELFTEST] GMod wrong behaviour replication test running")
-		-- https://github.com/Facepunch/garrysmod/pull/1642#issuecomment-601288451
-		-- thank you srlion
 		local a, b, c
 		hook.Add(name, "a", function()
 			a = true
@@ -225,6 +290,17 @@ local function RunTest()
 	end
 
 	do
+		lithium.log("[HOOK] [SELFTEST] Mixed invalid/valid hook ID test running")
+		local event = name .. "_mixed_ids"
+		hook.Add(event, "string_ok", function() return "ok" end)
+		local invalid_numeric = hook.Add(event, 123, function() end)
+		assert(invalid_numeric == nil, "numeric hook id should not be accepted")
+		assert(hook.GetTable()[event]["string_ok"] ~= nil, "valid hook id should still exist")
+		hook.Remove(event, "string_ok")
+		lithium.log("[HOOK] [SELFTEST] Mixed invalid/valid hook ID test OK")
+	end
+
+	do
 		lithium.log("[HOOK] [SELFTEST] IsValid-able turning invalid as hook name test running")
 		local called = 0
 		local entity = {
@@ -246,11 +322,52 @@ local function RunTest()
 
 		lithium.log("[HOOK] [SELFTEST] IsValid-able turning invalid as hook name test OK")
 	end
+
+	do
+		lithium.log("[HOOK] [SELFTEST] Dispatcher fallback migration test running")
+		local cv = GetConVar and GetConVar("lithium_hook_selftest_allow_fallback") or nil
+		if not (cv and cv:GetBool()) then
+			lithium.log("[HOOK] [SELFTEST] Dispatcher fallback migration test skipped (set lithium_hook_selftest_allow_fallback 1 to enable)")
+		elseif not (lithium.hook_dispatcher and lithium.hook_dispatcher.fallback_to_legacy) then
+			lithium.log("[HOOK] [SELFTEST] Dispatcher fallback migration test skipped (dispatcher unavailable)")
+		else
+			local event = name .. "_fallback_migration"
+			local order = {}
+
+			hook.Add(event, "A", function() table.insert(order, "A") end)
+			hook.Add(event, "B", function() table.insert(order, "B") end)
+
+			local switched = lithium.hook_dispatcher.fallback_to_legacy("selftest migration", { event = event })
+			assert(switched == true or switched == false, "fallback_to_legacy should return a boolean")
+
+			hook.Call(event, {})
+			assert(table.concat(order, ",") == "A,B", "Migrated hooks should preserve order and execute")
+
+			hook.Add(event, "B", function() table.insert(order, "B2") end)
+			hook.Add(event, "C", function() table.insert(order, "C") end)
+			hook.Call(event, {})
+			assert(order[#order - 2] == "A" and order[#order - 1] == "B2" and order[#order] == "C", "Post-fallback replacement/add should remain sane")
+
+			local tbl = hook.GetTable()
+			assert(type(tbl[event]) == "table" and type(tbl[event]["A"]) == "function" and type(tbl[event]["B"]) == "function", "GetTable shape should remain valid after fallback")
+
+			local before = lithium.hook_dispatcher.get_stats and lithium.hook_dispatcher.get_stats().fallback_count or 0
+			local switched_again = lithium.hook_dispatcher.fallback_to_legacy("selftest repeated", { event = event })
+			local after = lithium.hook_dispatcher.get_stats and lithium.hook_dispatcher.get_stats().fallback_count or before
+			assert(switched_again == false, "Repeated fallback attempt should be ignored once legacy is active")
+			assert(after == before, "Repeated fallback should not mutate fallback counters")
+
+			hook.Remove(event, "A")
+			hook.Remove(event, "B")
+			hook.Remove(event, "C")
+			lithium.log("[HOOK] [SELFTEST] Dispatcher fallback migration test OK")
+		end
+	end
 end
 
-local success, error = pcall(RunTest)
+local success, error_msg = pcall(RunTest)
 if not success then
-	lithium.warn(error)
+	lithium.warn(error_msg)
 	PrintTable(hook.GetLithiumTable()[name] or {})
 end
 return success
