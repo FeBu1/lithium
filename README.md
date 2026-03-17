@@ -39,6 +39,7 @@ Each module has:
 - `lithium_tuning_summary`: heuristic compatibility/network tuning suggestions.
 - `lithium_net_dump` / `lithium_net_reset`: network telemetry inspection/reset (requires `net.diagnostics` module enabled).
 - `lithium_report_compare <reportA> <reportB> [topN]`: compare two exported session reports and print largest telemetry deltas.
+- `lithium_menu`: open first-pass in-game Lithium diagnostics dashboard.
 
 ## Status
 

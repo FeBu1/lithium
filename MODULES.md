@@ -13,6 +13,7 @@
 - `server.addon_patches` - targeted patch framework (default enabled, no invasive patches enabled by default).
 - `client.gpu_saver` - optional QoL saver (enabled by default, user-facing behavior).
 - `client.timeout_overlay` - timeout diagnostics overlay.
+- `client.menu` - first-pass in-game diagnostics dashboard (read-mostly UI).
 
 ### Safe but optional
 
@@ -59,4 +60,5 @@ Modules with panic files auto-disable themselves on startup failure by writing `
 - `lithium_net_reset`
 - `lithium_report_compare <reportA> <reportB> [topN]`
 - `lithium_patch_dump`
+- `lithium_menu`
 - `lithium_compat_add_custom_rule <id> <source_pattern> [observe|feature_hint|force_legacy] [reason]`

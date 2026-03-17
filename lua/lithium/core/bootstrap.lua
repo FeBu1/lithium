@@ -184,6 +184,12 @@ function M.run()
         load = safe_include("lithium/timingout.lua")
     })
 
+    loader:register("client.menu", {
+        realm = "client",
+        convar = cvars.bool("client_menu", true, "Enable Lithium diagnostics menu", { server = false, per_realm = true }),
+        load = safe_include("lithium/client/menu.lua")
+    })
+
     loader:register("client.render.performant_lite", {
         realm = "client",
         convar = cvars.bool("exp_render_performant_lite", false, "Enable experimental PerformantRender-lite", { server = false, per_realm = true }),
@@ -194,7 +200,7 @@ function M.run()
     local result = loader:load_all({
         "core.gc", "hook.dispatch", "hook.diagnostics", "net.diagnostics", "legacy.util", "legacy.client_util", "legacy.cache_everything",
         "legacy.clear_default_hooks", "legacy.convar_spray", "server.addon_patches", "client.gpu_saver", "client.timeout_overlay",
-        "client.render.performant_lite"
+        "client.menu", "client.render.performant_lite"
     })
 
     lithium.module_summary = result
